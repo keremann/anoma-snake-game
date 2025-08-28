@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Anoma Snake Game</title>
+  <!-- Google Font: Press Start 2P -->
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <style>
+    :root { --mint:#6ee7b7; --ink:#032520; --bg1:#1e0b3a; --bg2:#0c1a3d; }
+    *{box-sizing:border-box}
+
+    /* === Animated Gradient Background === */
+    body {
+      margin:0; color:#e6eef8; font-family:"Press Start 2P", system-ui, Arial, sans-serif;
+      background: linear-gradient(120deg, var(--bg1), var(--bg2));
+      background-size: 200% 200%;
+      animation: bgShift 18s ease-in-out infinite;
+      overflow-x:hidden;
+    }
+    @keyframes bgShift{
+      0%{ background-position: 0% 50%; }
+      50%{ background-position: 100% 50%; }
+      100%{ background-position: 0% 50%; }
+    }
+
+    header {
+      display:flex; align-items:center; justify-content:space-between;
+      gap:12px; padding:16px; position:sticky; top:0;
+      background:rgba(5, 10, 20, 0.55); backdrop-filter: blur(6px);
+      border-bottom:1px solid rgba(255,255,255,0.08);
+      z-index:3;
+    }
+    .brand { display:flex; align-items:center; gap:12px; }
+    header img { width:60px; height:60px; border-radius:12px; }
+    h1 { margin:0; font-size:22px; letter-spacing:1px; }
+
+    .right { display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
+    .score {
+      margin:0; font-weight:700; background:var(--mint); color:var(--ink);
+      padding:8px 12px; border-radius:10px; min-width:200px; text-align:center;
+      box-shadow:0 0 18px rgba(110,231,183,0.35);
+    }
+    .roleBadge {
+      display:inline-flex; align-items:center; gap:8px; padding:6px 10px;
+      border-radius:999px; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.12); font-weight:700;
+      box-shadow:0 4px 14px rgba(0,0,0,0.25);
+    }
+    .dot { width:12px; height:12px; border-radius:50%; box-shadow:0 0 12px rgba(255,255,255,0.35); }
+    .hint { font-size:10px; color:#bee7df; margin:0; display:flex; align-items:center; gap:8px; }
+    .hint .arrow { display:inline-block; animation: nudge 1.2s ease-in-out infinite; }
+    @keyframes nudge { 0%,100%{ transform:translateX(0);} 50%{ transform:translateX(6px);} }
+
+    main { text-align:center; }
+
+    /* game wrap: glow rengi JS’ten role göre güncellenir */
+    .wrap { position:relative; display:inline-block; margin-top: 8px; }
+    canvas#game {
+      display:block; margin:20px auto;
+      border:2px solid #6ee7b7; background:#05131b; border-radius:12px;
+      box-shadow: 0 0 28px rgba(110,231,183,0.35);
+      transition: box-shadow .25s ease, border-color .25s ease;
+    }
+
+    /* subtle background particles */
+    .particles { position:fixed; inset:0; overflow:hidden; pointer-events:none; z-index:0; }
+    .particles .p {
+      position:absolute; width:3px; height:3px; border-radius:50%;
+      background:rgba(255,255,255,0.18); filter: blur(0.5px);
+      animation: floatUp linear infinite;
+    }
+    @keyframes floatUp {
+      0% { transform: translateY(110vh) translateX(0); opacity:0; }
+      10% { opacity:.6; }
+      100%{ transform: translateY(-10vh) translateX(0); opacity:0; }
+    }
+
+    button {
+      margin:10px; padding:12px 20px; font-size:14px; cursor:pointer;
+      border:none; border-radius:10px; background:var(--mint); color:var(--ink); font-weight:900;
+      box-shadow:0 8px 24px rgba(110,231,183,0.25);
+    }
+
+    #overlay { position:fixed; inset:0; background:rgba(0,0,0,0.65); display:none;
+      align-items:center; justify-content:center; z-index:10; }
+    #overlay .box { background:#0f1a24; padding:22px 28px; border-radius:12px;
+      border:1px solid var(--mint); max-width:520px; text-align:center;
+      box-shadow:0 14px 40px rgba(0,0,0,0.45);
+    }
+    #overlay h2 { margin:0 0 12px; font-size:18px; }
+
+    /* 🎉 DOM konfeti */
+    .confetti-container{position:fixed; inset:0; pointer-events:none; z-index:11; overflow:hidden}
+    .confetti{position:absolute; width:8px; height:12px; opacity:.95; animation:fall linear forwards;}
+    @keyframes fall{ 0%{transform:translateY(-20vh) rotate(0deg)} 100%{transform:translateY(110vh) rotate(720deg)} }
+
+    /* screen flash (white/red) */
+    .flashLayer{position:fixed; inset:0; background:#fff; opacity:0; pointer-events:none; z-index:12;}
+    .flashWhite{animation:flashW .5s ease;}
+    @keyframes flashW{ 0%{opacity:.75} 100%{opacity:0} }
+    .flashRed{background:#ff0033; animation:flashR .45s ease;}
+    @keyframes flashR{ 0%{opacity:.65} 100%{opacity:0} }
+
+    /* Game Over shake */
+    .shake { animation:shakeAnim .35s ease; }
+    @keyframes shakeAnim {
+      0%{ transform:translate(0,0); } 25%{ transform:translate(6px, -4px); }
+      50%{ transform:translate(-6px, 3px); } 75%{ transform:translate(4px, -5px); }
+      100%{ transform:translate(0,0); }
+    }
+
+    /* ✅ Signature */
+    .signature {
+      position:fixed;
+      bottom:12px;
+      right:14px;
+      font-family:"Press Start 2P", cursive;
+      font-size:11px;
+      color:#6ee7b7;
+      text-shadow:0 0 6px rgba(110,231,183,0.7);
+      opacity:0.85;
+      z-index:15;
+    }
+  </style>
+</head>
+<body>
+  <!-- subtle background particles -->
+  <div class="particles" id="particles"></div>
+
+  <header>
+    <div class="brand">
+      <img id="headerLogo" src="04XToCah_400x400.jpg" alt="Anoma Logo" />
+      <h1>Anoma Snake Game</h1>
+    </div>
+
+    <div class="right">
+      <p id="score" class="score">Level: 1 | Score: 0 / 5</p>
+      <div class="roleBadge">
+        <span id="roleDot" class="dot" style="background:#8a63d2"></span>
+        <span id="roleLabel">Initiate</span>
+      </div>
+      <p id="nextRole" class="hint">Reach <b>Level 2</b> to become <b>Apprentice</b>. <span class="arrow">➜</span></p>
+    </div>
+  </header>
+
+  <main>
+    <div class="wrap" id="wrap">
+      <canvas id="game"></canvas>
+    </div>
+    <button onclick="startGame()">Start Game</button>
+  </main>
+
+  <div id="overlay">
+    <div class="box">
+      <h2 id="overlayTitle"></h2>
+      <p id="overlayText"></p>
+      <button onclick="nextLevel()">Next</button>
+    </div>
+  </div>
+
+  <!-- screen flash layer -->
+  <div id="flash" class="flashLayer"></div>
+
+  <!-- ✅ Signature -->
+  <div class="signature">X : Keremannn</div>
+
+<script>
+/* ========= Config ========= */
+const maxLevel = 7;
+const goals = [5,10,15,20,25,30,35];
+const cellSizes = [36,32,28,24,20,16,12];
+const speeds    = [200,185,170,155,140,125,110]; // ms per step
+const gridCount = 20;
+
+/* Roles */
+const ROLES = [
+  { name:'Initiate',      color:'#8a63d2' },
+  { name:'Apprentice',    color:'#1d4ed8' },
+  { name:'Seeker',        color:'#10b981' },
+  { name:'Acolyte',       color:'#f59e0b' },
+  { name:'Master',        color:'#ef4444' },
+  { name:'Grand Master',  color:'#ef4444' },
+  { name:'Intent Master', color:'#22d3ee' },
+];
+const WIZARD = { name:'Wizard', color:'#f472b6' };
+
+/* DOM */
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const scoreEl = document.getElementById('score');
+const overlay = document.getElementById('overlay');
+const overlayTitle = document.getElementById('overlayTitle');
+const overlayText = document.getElementById('overlayText');
+const roleDotEl = document.getElementById('roleDot');
+const roleLabelEl = document.getElementById('roleLabel');
+const nextRoleEl = document.getElementById('nextRole');
+const wrapEl = document.getElementById('wrap');
+const flashEl = document.getElementById('flash');
+
+/* Assets */
+const LOGO_PATH = '04XToCah_400x400.jpg';
+const foodImg = new Image();
+let foodImgLoaded = false;
+foodImg.onload = ()=>{ foodImgLoaded = true; initialPaint(); };
+foodImg.onerror = ()=>{ initialPaint(); };
+foodImg.src = LOGO_PATH;
+
+/* State */
+let level = 1, levelScore = 0, totalScore = 0;
+let cellSize = cellSizes[0], stepMs = speeds[0];
+let snake = [], dir = {x:1,y:0}, nextDir = {x:1,y:0};
+let food = null, timerId = null, overlayMode = 'next';
+
+/* Anim state */
+let tick = 0;
+let bursts = []; // [{x,y,age,max}]
+let headCrashFrames = 0;
+
+/* ===== Helpers ===== */
+function currentRole(){ return ROLES[level-1]; }
+function nextRoleObj(){ return (level < maxLevel) ? ROLES[level] : WIZARD; }
+
+function setCanvasForLevel(){
+  cellSize = cellSizes[level-1];
+  stepMs   = speeds[level-1];
+  canvas.width  = gridCount * cellSize;
+  canvas.height = gridCount * cellSize;
+  const col = currentRole().color;
+  canvas.style.borderColor = col;
+  canvas.style.boxShadow = `0 0 28px ${hexToRgba(col,0.45)}, 0 0 6px ${hexToRgba(col,0.7)} inset`;
+}
+
+function updateScore(){
+  scoreEl.textContent = `Level: ${level} | Score: ${levelScore} / ${goals[level-1]}`;
+  const cur = currentRole();
+  roleDotEl.style.background = cur.color;
+  roleLabelEl.textContent = cur.name;
+  const next = nextRoleObj();
+  nextRoleEl.innerHTML = (level < maxLevel)
+    ? `Reach <b>Level ${level+1}</b> to become <b>${next.name}</b>. <span class="arrow">➜</span>`
+    : `Finish Level 7 to become <b>${next.name}</b>. <span class="arrow">➜</span>`;
+}
+
+function randomCell(){ return { x: Math.floor(Math.random()*gridCount), y: Math.floor(Math.random()*gridCount) }; }
+function cellsEqual(a,b){ return a.x===b.x && a.y===b.y; }
+
+function placeFood(){
+  let p; let tries=0;
+  do { p = randomCell(); tries++; } while (snake.some(s=>cellsEqual(s,p)) && tries<200);
+  food = p;
+}
+
+function resetSnake(){
+  const mid = Math.floor(gridCount/2);
+  snake = [{x:mid,y:mid}, {x:mid-1,y:mid}, {x:mid-2,y:mid}];
+  dir = {x:1,y:0}; nextDir = {x:1,y:0};
+  headCrashFrames = 0;
+}
+
+function drawGridBG(){
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = '#05131b';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+  ctx.lineWidth = 1;
+  for(let i=0;i<=gridCount;i++){
+    ctx.beginPath(); ctx.moveTo(i*cellSize,0); ctx.lineTo(i*cellSize,canvas.height); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0,i*cellSize); ctx.lineTo(canvas.width,i*cellSize); ctx.stroke();
+  }
+}
+
+function drawFood(){
+  if(!food) return;
+  const cx = food.x*cellSize + cellSize/2;
+  const cy = food.y*cellSize + cellSize/2;
+
+  ctx.save();
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = hexToRgba('#6ee7b7', 0.18 + 0.06*Math.sin(tick/10));
+  ctx.beginPath(); ctx.arc(cx, cy, Math.max(6,cellSize*0.55), 0, Math.PI*2); ctx.fill();
+
+  const angle = (tick/30) % (Math.PI*2);
+  const scale = 0.9 + 0.08*Math.sin(tick/12);
+  ctx.translate(cx, cy);
+  ctx.rotate(angle);
+  ctx.scale(scale, scale);
+
+  const size = cellSize;
+  if (foodImgLoaded) ctx.drawImage(foodImg, -size/2, -size/2, size, size);
+  else { ctx.fillStyle = '#6ee7b7'; ctx.fillRect(-size/2, -size/2, size, size); }
+  ctx.restore();
+}
+
+function drawSnake(){
+  for(let i=snake.length-1;i>=0;i--){
+    const s = snake[i];
+    const x = s.x*cellSize, y = s.y*cellSize;
+    ctx.save();
+    ctx.shadowBlur = 12;
+    ctx.shadowColor = '#2af598';
+    ctx.fillStyle = `rgba(60,255,180,${0.9 - (i/Math.max(1,snake.length))*0.5})`;
+    ctx.fillRect(x, y, cellSize, cellSize);
+    ctx.restore();
+  }
+  const head = snake[0];
+  if (head){
+    const x = head.x*cellSize, y = head.y*cellSize;
+    ctx.save();
+    ctx.fillStyle = '#39ff14';
+    ctx.fillRect(x, y, cellSize, cellSize);
+    ctx.lineWidth = Math.max(2, cellSize*0.12);
+    ctx.strokeStyle = '#0b1220';
+    ctx.strokeRect(x+0.5, y+0.5, cellSize-1, cellSize-1);
+    const s = cellSize, eye=Math.max(2, Math.round(s*0.12));
+    ctx.fillStyle = '#0b1220';
+    if (dir.x===1){ ctx.fillRect(x+s*0.58, y+s*0.25, eye, eye); ctx.fillRect(x+s*0.58, y+s*0.65-eye, eye, eye); }
+    if (dir.x===-1){ ctx.fillRect(x+s*0.24, y+s*0.25, eye, eye); ctx.fillRect(x+s*0.24, y+s*0.65-eye, eye, eye); }
+    if (dir.y===1){ ctx.fillRect(x+s*0.25, y+s*0.58, eye, eye); ctx.fillRect(x+s*0.65-eye, y+s*0.58, eye, eye); }
+    if (dir.y===-1){ ctx.fillRect(x+s*0.25, y+s*0.24, eye, eye); ctx.fillRect(x+s*0.65-eye, y+s*0.24, eye, eye); }
+    ctx.fillRect(x+s*0.48, y+s*0.48, Math.max(1, eye-1), Math.max(1, eye-1));
+    ctx.beginPath();
+    ctx.strokeStyle = '#0b1220';
+    ctx.lineWidth = Math.max(1.5, s*0.06);
+    ctx.arc(x+s*0.5, y+s*0.62, s*0.14, 0.15*Math.PI, 0.85*Math.PI);
+    ctx.stroke();
+
+    if (headCrashFrames > 0){
+      ctx.strokeStyle = '#ff3355';
+      ctx.lineWidth = Math.max(2, s*0.12);
+      ctx.beginPath(); ctx.moveTo(x+s*0.25, y+s*0.25); ctx.lineTo(x+s*0.75, y+s*0.75); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x+s*0.75, y+s*0.25); ctx.lineTo(x+s*0.25, y+s*0.75); ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+function drawBursts(){
+  for (const b of bursts){
+    const alpha = Math.max(0, 1 - b.age / b.max);
+    const r = b.age * (cellSize*0.12);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = hexToRgba('#6ee7b7', 0.25*alpha);
+    ctx.beginPath(); ctx.arc(b.x, b.y, r*1.4, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = hexToRgba('#6ee7b7', 0.65*alpha);
+    ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, Math.PI*2); ctx.stroke();
+    ctx.restore();
+    b.age += 1;
+  }
+  bursts = bursts.filter(b => b.age < b.max);
+}
+
+function render(){
+  drawGridBG();
+  drawFood();
+  drawSnake();
+  drawBursts();
+  updateScore();
+  tick++;
+}
+
+/* ========= Game flow ========= */
+function gameStep(){
+  dir = nextDir;
+  let head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+
+  if (head.x < 0 || head.x >= gridCount || head.y < 0 || head.y >= gridCount) { return gameOver(); }
+  if (snake.some((s,i)=> i>0 && cellsEqual(s,head))) { return gameOver(); }
+
+  snake.unshift(head);
+
+  if (food && cellsEqual(head, food)){
+    levelScore++; totalScore++;
+    bursts.push({ x: head.x*cellSize + cellSize/2, y: head.y*cellSize + cellSize/2, age:0, max:18 });
+    placeFood();
+    if (levelScore >= goals[level-1]) return levelPassed();
+  } else {
+    snake.pop();
+  }
+
+  render();
+}
+
+function startLevel(){
+  levelScore = 0;
+  setCanvasForLevel();
+  resetSnake();
+  placeFood();
+  updateScore();
+  render();
+  clearInterval(timerId);
+  timerId = setInterval(gameStep, stepMs);
+}
+function stopGame(){ clearInterval(timerId); }
+
+function startGame(){ overlay.style.display = 'none'; level = 1; totalScore = 0; startLevel(); }
+
+function nextLevel(){
+  overlay.style.display = 'none';
+  if (overlayMode === 'finish'){ level = 1; totalScore = 0; startLevel(); }
+  else if (overlayMode === 'retry'){ startLevel(); }
+  else { level = Math.min(maxLevel, level+1); startLevel(); }
+}
+
+function gameOver(){
+  stopGame();
+  screenFlash('red');
+  wrapEl.classList.add('shake');
+  headCrashFrames = 1; render();
+  setTimeout(()=> wrapEl.classList.remove('shake'), 360);
+
+  overlayMode = 'retry';
+  overlayTitle.textContent = 'Game Over';
+  overlayText.innerHTML  = `You died at Level <b>${level}</b>. Click Next to retry this level.`;
+  setTimeout(()=> overlay.style.display = 'flex', 150);
+}
+
+function levelPassed(){
+  stopGame();
+  startConfettiDOM();
+  screenFlash('white');
+  if (level === maxLevel){
+    overlayMode = 'finish';
+    overlayTitle.textContent = 'Congratulations!';
+    overlayText.innerHTML  = `You finished all 7 levels and reached the <b>${WIZARD.name}</b> role.<br/>
+      You are now one of the most valued members of the Anoma community. 🧙‍♂️✨`;
+  } else {
+    overlayMode = 'next';
+    const upcoming = nextRoleObj().name;
+    overlayTitle.textContent = 'Congratulations!';
+    overlayText.innerHTML  = `You passed Level ${level}. Next role: <b>${upcoming}</b>. Click Next for Level ${level+1}.`;
+  }
+  overlay.style.display = 'flex';
+}
+
+/* ========= Visual helpers ========= */
+function hexToRgba(hex, a){
+  const h = hex.replace('#','');
+  const bigint = parseInt(h.length===3 ? h.split('').map(c=>c+c).join('') : h, 16);
+  const r = (bigint>>16)&255, g = (bigint>>8)&255, b = bigint&255;
+  return `rgba(${r},${g},${b},${a})`;
+}
+function screenFlash(type='white'){
+  flashEl.className = 'flashLayer';
+  if (type==='red') flashEl.classList.add('flashRed');
+  else flashEl.classList.add('flashWhite');
+  setTimeout(()=> flashEl.className='flashLayer', 520);
+}
+
+/* ========= DOM konfeti ========= */
+function startConfettiDOM(){
+  const old = document.querySelector('.confetti-container'); if (old) old.remove();
+  const container = document.createElement('div');
+  container.className = 'confetti-container'; document.body.appendChild(container);
+  const colors = ['#6ee7b7','#22d3ee','#f472b6','#f59e0b','#60a5fa','#34d399','#f43f5e'];
+  const pieces = 140;
+  for(let i=0;i<pieces;i++){
+    const s = document.createElement('span'); s.className = 'confetti';
+    const size = 6 + Math.random()*6;
+    s.style.width = `${size}px`; s.style.height = `${(size*1.4).toFixed(1)}px`;
+    s.style.left = `${Math.random()*100}vw`; s.style.top = `${-10 - Math.random()*20}vh`;
+    s.style.background = colors[(Math.random()*colors.length)|0];
+    s.style.animationDuration = `${(1.6 + Math.random()*1.2).toFixed(2)}s`;
+    s.style.animationDelay = `${(Math.random()*0.2).toFixed(2)}s`;
+    s.style.borderRadius = Math.random()<0.4 ? '2px' : '50%';
+    container.appendChild(s);
+  }
+  setTimeout(()=>container.remove(), 2200);
+}
+
+/* ========= Input ========= */
+window.addEventListener('keydown', (e)=>{
+  const k = e.key.toLowerCase();
+  if (['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k)) e.preventDefault();
+  if((k==='arrowup'||k==='w')   && dir.y!==1)  nextDir={x:0,y:-1};
+  if((k==='arrowdown'||k==='s') && dir.y!==-1) nextDir={x:0,y:1};
+  if((k==='arrowleft'||k==='a') && dir.x!==1)  nextDir={x:-1,y:0};
+  if((k==='arrowright'||k==='d')&& dir.x!==-1) nextDir={x:1,y:0};
+}, { passive:false });
+
+/* ========= First paint + particles ========= */
+function initialPaint(){ setCanvasForLevel(); resetSnake(); placeFood(); updateScore(); render(); }
+setTimeout(()=>{ if(!foodImgLoaded) initialPaint(); }, 400);
+
+(function makeParticles(){
+  const cont = document.getElementById('particles');
+  const N = 24;
+  for(let i=0;i<N;i++){
+    const s = document.createElement('span');
+    s.className = 'p';
+    s.style.left = Math.random()*100 + 'vw';
+    s.style.animationDuration = (18 + Math.random()*16) + 's';
+    s.style.animationDelay = (Math.random()*8) + 's';
+    s.style.opacity = 0.2 + Math.random()*0.5;
+    s.style.width = s.style.height = (2 + Math.random()*3) + 'px';
+    cont.appendChild(s);
+  }
+})();
+</script>
+</body>
+</html>
